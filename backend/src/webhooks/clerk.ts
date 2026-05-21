@@ -65,7 +65,8 @@ export async function clerkWebhookHandler(req: Request, res: Response) {
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("Clerk webhook error:", err);
-    res.status(400).json({ error: "Invalid Webhook!" });
+  console.error("Clerk webhook error:", err); // already there
+  console.error("Clerk webhook error details:", JSON.stringify(err, Object.getOwnPropertyNames(err))); // ← ADD THIS
+  res.status(400).json({ error: "Invalid Webhook!" });
   }
 }
