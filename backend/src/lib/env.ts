@@ -51,4 +51,6 @@ export function getEnv() {
 
     return cachedEnv;
   }
+
+   return cachedEnv;
 }
