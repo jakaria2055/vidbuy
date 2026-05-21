@@ -6,67 +6,149 @@ import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 
+// export async function clerkWebhookHandler(req: Request, res: Response) {
+//   const env = getEnv();
+
+//   try {
+//     if (!env?.CLERK_WEBHOOK_SECRET) {
+//       res.status(503).send("Webhook secret not found!");
+//       return;
+//     }
+
+//     const payload =
+//       req.body instanceof Buffer ? req.body.toString("utf8") : String(req.body);
+
+//     const request = new Request("https://internal/webhooks/clerk", {
+//       method: "POST",
+//       headers: new Headers(req.headers as HeadersInit),
+//       body: payload,
+//     });
+
+//     const evt = await verifyWebhook(request, {
+//       signingSecret: env.CLERK_WEBHOOK_SECRET,
+//     });
+
+//     if (evt.type == "user.created" || evt.type === "user.updated") {
+//       const u = evt.data;
+
+//       const email =
+//         u.email_addresses?.find((e) => e.id === u.primary_email_address_id)
+//           ?.email_address ?? u.email_addresses?.[0]?.email_address;
+
+//       const displayName =
+//         [u.first_name, u.last_name].filter(Boolean).join(" ") ||
+//         u.username ||
+//         null;
+
+//       const role = parseRole(u.public_metadata?.role);
+
+//       await db
+//         .insert(users)
+//         .values({
+//           clerkUserId: u.id,
+//           email,
+//           displayName,
+//           role,
+//         })
+//         .onConflictDoUpdate({
+//           target: users.clerkUserId,
+//           set: { email, displayName, role, updatedAt: new Date() },
+//         });
+//     }
+
+//     if (evt.type === "user.deleted") {
+//       const id = evt.data.id;
+//       if (id) {
+//         await db.delete(users).where(eq(users.clerkUserId, id));
+//       }
+//     }
+
+//     res.json({ ok: true });
+//   } catch (err) {
+//   console.error("Clerk webhook error:", err); // already there
+//   console.error("Clerk webhook error details:", JSON.stringify(err, Object.getOwnPropertyNames(err))); // ← ADD THIS
+//   res.status(400).json({ error: "Invalid Webhook!" });
+//   }
+// }
+
+
+
 export async function clerkWebhookHandler(req: Request, res: Response) {
   const env = getEnv();
-
+  console.log("🔔 Webhook handler started");
+  
   try {
     if (!env?.CLERK_WEBHOOK_SECRET) {
+      console.log("❌ No webhook secret");
       res.status(503).send("Webhook secret not found!");
       return;
     }
+    console.log("✅ Webhook secret found");
 
     const payload =
-      req.body instanceof Buffer ? req.body.toString("utf8") : String(req.body);
+      req.body instanceof Buffer
+        ? req.body.toString("utf8")
+        : String(req.body);
+    console.log("📦 Payload type:", typeof req.body, "| length:", payload.length);
+
+    const normalizedHeaders = Object.fromEntries(
+      Object.entries(req.headers).map(([key, val]) => [
+        key,
+        Array.isArray(val) ? val.join(",") : (val ?? ""),
+      ])
+    );
 
     const request = new Request("https://internal/webhooks/clerk", {
       method: "POST",
-      headers: new Headers(req.headers as HeadersInit),
+      headers: new Headers(normalizedHeaders),
       body: payload,
     });
 
+    console.log("🔐 Verifying webhook...");
     const evt = await verifyWebhook(request, {
       signingSecret: env.CLERK_WEBHOOK_SECRET,
     });
+    console.log("✅ Webhook verified! Event type:", evt.type);
 
-    if (evt.type == "user.created" || evt.type === "user.updated") {
+    if (evt.type === "user.created" || evt.type === "user.updated") {
       const u = evt.data;
-
+      console.log("👤 Processing user:", u.id);
+      
       const email =
         u.email_addresses?.find((e) => e.id === u.primary_email_address_id)
           ?.email_address ?? u.email_addresses?.[0]?.email_address;
-
       const displayName =
         [u.first_name, u.last_name].filter(Boolean).join(" ") ||
         u.username ||
         null;
-
       const role = parseRole(u.public_metadata?.role);
+      
+      console.log("💾 Inserting into DB:", { clerkUserId: u.id, email, displayName, role });
 
       await db
         .insert(users)
-        .values({
-          clerkUserId: u.id,
-          email,
-          displayName,
-          role,
-        })
+        .values({ clerkUserId: u.id, email, displayName, role })
         .onConflictDoUpdate({
           target: users.clerkUserId,
           set: { email, displayName, role, updatedAt: new Date() },
         });
+      
+      console.log("✅ DB insert successful!");
     }
 
     if (evt.type === "user.deleted") {
       const id = evt.data.id;
+      console.log("🗑️ Deleting user:", id);
       if (id) {
         await db.delete(users).where(eq(users.clerkUserId, id));
+        console.log("✅ DB delete successful!");
       }
     }
 
     res.json({ ok: true });
   } catch (err) {
-  console.error("Clerk webhook error:", err); // already there
-  console.error("Clerk webhook error details:", JSON.stringify(err, Object.getOwnPropertyNames(err))); // ← ADD THIS
-  res.status(400).json({ error: "Invalid Webhook!" });
+    console.error("❌ Clerk webhook error:", err);
+    console.error("❌ Error details:", JSON.stringify(err, Object.getOwnPropertyNames(err)));
+    res.status(400).json({ error: "Invalid Webhook!" });
   }
 }
