@@ -14,6 +14,12 @@ const app = express();
 
 const rawJson = express.raw({ type: "application/json", limit: "1mb" });
 
+
+app.use((req, _res, next) => {
+  console.log(`${req.method} ${req.path}`);
+  next();
+});//Debug
+
 app.post("/webhooks/clerk", rawJson, (req, res) => {
   void clerkWebhookHandler(req, res);
 });
