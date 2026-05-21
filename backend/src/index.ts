@@ -2,23 +2,18 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 
-import fs from "node:fs"
+import fs from "node:fs";
 import path from "node:path";
 
 import { clerkMiddleware } from "@clerk/express";
 import { getEnv } from "./lib/env.js";
 import { clerkWebhookHandler } from "./webhooks/clerk.js";
+import job from "./lib/cron.js";
 
 const env = getEnv();
 const app = express();
 
 const rawJson = express.raw({ type: "application/json", limit: "1mb" });
-
-
-app.use((req, _res, next) => {
-  console.log(`${req.method} ${req.path}`);
-  next();
-});//Debug
 
 app.post("/webhooks/clerk", rawJson, (req, res) => {
   void clerkWebhookHandler(req, res);
@@ -28,6 +23,9 @@ app.use(express.json());
 app.use(cors());
 app.use(clerkMiddleware());
 
+app.get("/health", (_req, res) => {
+  res.json({ ok: true });
+});
 
 //DOCKER
 const publicDir = path.join(process.cwd(), "public");
@@ -49,6 +47,9 @@ if (fs.existsSync(publicDir)) {
   });
 }
 
-app.listen(env?.PORT, () =>
-  console.log("Server is running on port: ", env?.PORT),
-);
+app.listen(env?.PORT, () => {
+  console.log("Server is running on port: ", env?.PORT);
+  if (env.NODE_ENV === "production") {
+    job.start();
+  }
+});
