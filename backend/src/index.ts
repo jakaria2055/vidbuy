@@ -9,6 +9,9 @@ import { clerkMiddleware } from "@clerk/express";
 import { getEnv } from "./lib/env.js";
 import { clerkWebhookHandler } from "./webhooks/clerk.js";
 import job from "./lib/cron.js";
+import userRouter from "./routes/userRoute.js";
+import productRouter from "./routes/productRouter.js";
+import streamRouter from "./routes/streamRouter.js";
 
 const env = getEnv();
 const app = express();
@@ -26,6 +29,10 @@ app.use(clerkMiddleware());
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
+
+app.use("/api/me", userRouter)
+app.use("/api/products", productRouter)
+app.use("/api/stream", streamRouter);
 
 //DOCKER
 const publicDir = path.join(process.cwd(), "public");
